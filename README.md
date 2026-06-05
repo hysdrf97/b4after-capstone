@@ -145,10 +145,3 @@ infra-b4after/
 | Management Script     | `manage.sh`                   | Shortcut command untuk tim                 |
 
 ---
-
-## Integrasi dengan Anggota Lain
-
-- **Akwila (Backend)** → Build image API di folder `./api/`, expose `/metrics` endpoint
-- **Destyanaraira (System Analyst)** → Threshold di `autoscaler.sh` bisa disesuaikan
-- **Salma (Network Eng.)** → Konfigurasi jaringan di `docker-compose.yml` bagian `networks`
-- **Andhika (PM)** → Lihat hasil monitoring di Grafana dashboard

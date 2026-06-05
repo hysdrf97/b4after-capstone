@@ -1,0 +1,67 @@
+package api
+
+import (
+    "net/http"
+	"os"
+    "project1/db"   
+    "project1/internal/model"
+    "github.com/gin-gonic/gin"
+)
+
+// GET /users/:id  (read-heavy)
+func GetUser(c *gin.Context) {
+    id := c.Param("id")
+    var user model.User
+    err := db.DB.Get(&user, "SELECT * FROM users WHERE id=$1", id)
+    if err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+        return
+    }
+    c.JSON(http.StatusOK, user)
+}
+
+// GET /transactions/:id  (read-heavy) ← TAMBAHAN
+func GetTransaction(c *gin.Context) {
+    id := c.Param("id")
+    var tx model.Transaction
+    err := db.DB.Get(&tx, "SELECT * FROM transactions WHERE id=$1", id)
+    if err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Transaction not found"})
+        return
+    }
+    c.JSON(http.StatusOK, tx)
+}
+
+// POST /transactions  (write-heavy)
+func CreateTransaction(c *gin.Context) {
+    var tx model.Transaction
+    if err := c.ShouldBindJSON(&tx); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+
+    // Validasi type
+    if tx.Type != "credit" && tx.Type != "debit" {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "type must be 'credit' or 'debit'"})
+        return
+    }
+
+    tx.Status = "pending"
+    _, err := db.DB.Exec(
+        `INSERT INTO transactions(user_id, type, amount, status) 
+         VALUES($1, $2, $3, $4)`,
+        tx.UserID, tx.Type, tx.Amount, tx.Status,
+    )
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+    c.JSON(http.StatusCreated, gin.H{"message": "Transaction created"})
+}
+// GET /health
+func HealthCheck(c *gin.Context) {
+    c.JSON(200, gin.H{
+        "status":      "ok",
+        "instance_id": os.Getenv("INSTANCE_ID"),
+    })
+}

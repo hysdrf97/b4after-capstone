@@ -1,0 +1,71 @@
+# ==============================================================
+# Prometheus - Konfigurasi Monitoring
+# B4 After - Cloud Infrastructure
+# Mengumpulkan metrics dari semua service setiap 15 detik
+# ==============================================================
+
+global:
+  scrape_interval: 15s        # Ambil metrics setiap 15 detik
+  evaluation_interval: 15s    # Evaluasi alert rules setiap 15 detik
+  scrape_timeout: 10s
+
+  external_labels:
+    project: "b4after-capstone"
+    team: "cloud-infrastructure"
+
+# ==============================================================
+# ALERT RULES - Aturan untuk trigger alert
+# ==============================================================
+rule_files:
+  - "alert_rules.yml"
+
+# ==============================================================
+# SCRAPE CONFIGS - Dari mana Prometheus ambil metrics
+# ==============================================================
+scrape_configs:
+
+  # Prometheus itu sendiri
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Metrics host (CPU, RAM, Disk sistem)
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: "([^:]+).*"
+        replacement: "$1"
+
+  # Metrics Docker container
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    metric_relabel_configs:
+      # Hanya ambil metrics container b4after
+      - source_labels: [container_label_com_docker_compose_project]
+        regex: "infra-b4after"
+        action: keep
+
+  # Metrics Redis
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:6379"]
+    # Menggunakan redis_exporter (embedded metrics dari Redis)
+    metrics_path: /metrics
+
+  # Metrics API service (jika API expose /metrics endpoint)
+  - job_name: "api-services"
+    static_configs:
+      - targets:
+          - "api-1:8080"
+          - "api-2:8080"
+          - "api-3:8080"
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: "(api-[0-9]+):.*"
+        target_label: instance
+        replacement: "$1"

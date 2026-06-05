@@ -1,0 +1,81 @@
+# ==============================================================
+# Alert Rules - Aturan Peringatan
+# Prometheus akan kirim alert kalau kondisi ini terpenuhi
+# ==============================================================
+
+groups:
+  - name: b4after-infrastructure-alerts
+    interval: 15s
+    rules:
+
+      # --------------------------------------------------------
+      # Alert: CPU container API terlalu tinggi
+      # --------------------------------------------------------
+      - alert: APIHighCPU
+        expr: >
+          rate(container_cpu_usage_seconds_total{name=~"b4after-api-.*"}[2m]) * 100 > 70
+        for: 1m
+        labels:
+          severity: warning
+          team: cloud-infra
+        annotations:
+          summary: "CPU API tinggi: {{ $labels.name }}"
+          description: "Container {{ $labels.name }} menggunakan CPU {{ $value | printf \"%.1f\" }}% selama > 1 menit"
+
+      # --------------------------------------------------------
+      # Alert: Memory container API terlalu tinggi
+      # --------------------------------------------------------
+      - alert: APIHighMemory
+        expr: >
+          (container_memory_usage_bytes{name=~"b4after-api-.*"} /
+          container_spec_memory_limit_bytes{name=~"b4after-api-.*"}) * 100 > 80
+        for: 1m
+        labels:
+          severity: warning
+          team: cloud-infra
+        annotations:
+          summary: "Memory API tinggi: {{ $labels.name }}"
+          description: "Container {{ $labels.name }} menggunakan {{ $value | printf \"%.1f\" }}% memory"
+
+      # --------------------------------------------------------
+      # Alert: API container down
+      # --------------------------------------------------------
+      - alert: APIContainerDown
+        expr: >
+          absent(container_last_seen{name="b4after-api-1"}) or
+          (time() - container_last_seen{name="b4after-api-1"}) > 30
+        for: 30s
+        labels:
+          severity: critical
+          team: cloud-infra
+        annotations:
+          summary: "API container utama DOWN!"
+          description: "Container b4after-api-1 tidak terdeteksi selama 30 detik"
+
+      # --------------------------------------------------------
+      # Alert: Redis memory hampir penuh
+      # --------------------------------------------------------
+      - alert: RedisMemoryHigh
+        expr: >
+          redis_memory_used_bytes / redis_memory_max_bytes * 100 > 90
+        for: 2m
+        labels:
+          severity: warning
+          team: cloud-infra
+        annotations:
+          summary: "Redis memory hampir penuh"
+          description: "Redis menggunakan {{ $value | printf \"%.1f\" }}% dari memory limit"
+
+      # --------------------------------------------------------
+      # Alert: PostgreSQL connection pool hampir penuh
+      # --------------------------------------------------------
+      - alert: PostgresHighConnections
+        expr: >
+          pg_stat_database_numbackends > 80
+        for: 2m
+        labels:
+          severity: warning
+          team: cloud-infra
+        annotations:
+          summary: "PostgreSQL koneksi tinggi"
+          description: "Database memiliki {{ $value }} koneksi aktif"

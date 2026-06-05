@@ -1,0 +1,241 @@
+networks:
+  b4after-net:
+    driver: bridge
+
+volumes:
+  postgres-primary-data:
+  redis-data:
+  rabbitmq-data:
+  prometheus-data:
+  grafana-data:
+
+services:
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: b4after-nginx
+    ports:
+      - "8081:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api-1
+    networks:
+      - b4after-net
+    restart: unless-stopped
+
+  api-1:
+    build: .
+    container_name: b4after-api-1
+    environment:
+      - INSTANCE_ID=api-1
+      - DB_HOST=postgres-primary
+      - DB_PORT=5432
+      - DB_USER=bank_user
+      - DB_PASSWORD=bank_secret
+      - DB_NAME=bank_db
+      - DB_REPLICA_HOST=postgres-replica
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_URL=amqp://bank_user:bank_secret@rabbitmq:5672/
+      - PORT=8080
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      postgres-replica:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - b4after-net
+    restart: unless-stopped
+
+  api-2:
+    build: .
+    container_name: b4after-api-2
+    environment:
+      - INSTANCE_ID=api-2
+      - DB_HOST=postgres-primary
+      - DB_PORT=5432
+      - DB_USER=bank_user
+      - DB_PASSWORD=bank_secret
+      - DB_NAME=bank_db
+      - DB_REPLICA_HOST=postgres-replica
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_URL=amqp://bank_user:bank_secret@rabbitmq:5672/
+      - PORT=8080
+    depends_on:
+      - api-1
+    networks:
+      - b4after-net
+    restart: unless-stopped
+
+  api-3:
+    build: .
+    container_name: b4after-api-3
+    environment:
+      - INSTANCE_ID=api-3
+      - DB_HOST=postgres-primary
+      - DB_PORT=5432
+      - DB_USER=bank_user
+      - DB_PASSWORD=bank_secret
+      - DB_NAME=bank_db
+      - DB_REPLICA_HOST=postgres-replica
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_URL=amqp://bank_user:bank_secret@rabbitmq:5672/
+      - PORT=8080
+    depends_on:
+      - api-2
+    networks:
+      - b4after-net
+    restart: unless-stopped
+
+  postgres-primary:
+    image: postgres:16-alpine
+    container_name: b4after-postgres-primary
+    environment:
+      POSTGRES_USER: bank_user
+      POSTGRES_PASSWORD: bank_secret
+      POSTGRES_DB: bank_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-primary-data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - b4after-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bank_user -d bank_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-replica:
+    image: postgres:16-alpine
+    container_name: b4after-postgres-replica
+    environment:
+      POSTGRES_USER: bank_user
+      POSTGRES_PASSWORD: bank_secret
+      POSTGRES_DB: bank_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - b4after-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bank_user -d bank_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: b4after-redis
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - b4after-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: b4after-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: bank_user
+      RABBITMQ_DEFAULT_PASS: bank_secret
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - b4after-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: b4after-worker
+    environment:
+      - DB_HOST=postgres-primary
+      - DB_PORT=5432
+      - DB_USER=bank_user
+      - DB_PASSWORD=bank_secret
+      - DB_NAME=bank_db
+      - RABBITMQ_URL=amqp://bank_user:bank_secret@rabbitmq:5672/
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - b4after-net
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: b4after-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./internal/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    networks:
+      - b4after-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: b4after-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - b4after-net
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: b4after-node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    networks:
+      - b4after-net

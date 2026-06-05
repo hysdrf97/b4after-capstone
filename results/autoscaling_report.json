@@ -1,0 +1,60 @@
+{
+  "generated_at": "2026-06-05T13:01:02.040Z",
+  "phase": "FASE 3 — Full System (Cache + Queue + Auto-Scaling)",
+  "traffic_distribution": {
+    "GET /users/:id       (read-heavy)": {
+      "requests": 5640,
+      "percentage": "40.5%"
+    },
+    "GET /transactions/:id (read-heavy)": {
+      "requests": 5495,
+      "percentage": "39.5%"
+    },
+    "POST /transactions    (write-heavy)": {
+      "requests": 2785,
+      "percentage": "20.0%"
+    }
+  },
+  "global": {
+    "total_requests": 13920,
+    "duration_seconds": 210,
+    "tps_avg": "66.29",
+    "error_rate": "0.00%",
+    "latency": {
+      "avg": "1.89ms",
+      "p50": "1.74ms",
+      "p95": "3.51ms",
+      "p99": "4.40ms",
+      "max": "24.96ms"
+    }
+  },
+  "per_endpoint": {
+    "GET /users/:id": {
+      "requests": 5640,
+      "error_rate": "0.00%",
+      "latency": {
+        "p50": "1.65ms",
+        "p95": "3.23ms",
+        "p99": "4.25ms"
+      }
+    },
+    "GET /transactions/:id": {
+      "requests": 5495,
+      "error_rate": "0.00%",
+      "latency": {
+        "p50": "2.11ms",
+        "p95": "3.88ms",
+        "p99": "4.66ms"
+      }
+    },
+    "POST /transactions": {
+      "requests": 2785,
+      "error_rate": "0.00%",
+      "latency": {
+        "p50": "1.26ms",
+        "p95": "2.23ms",
+        "p99": "2.65ms"
+      }
+    }
+  }
+}
